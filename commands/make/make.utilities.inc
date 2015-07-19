@@ -36,7 +36,7 @@ function _make_parse_info_file($makefile) {
   }
 
   // $info['format'] will specify the determined format.
-  $info = _make_determine_format($data);
+  $info = _make_determine_format($data, $makefile);
 
   // Set any allowed options.
   if (!empty($info['options'])) {
@@ -83,7 +83,7 @@ function _make_parse_info_file($makefile) {
           // Move core back to the top of the list, where
           // make_generate_from_makefile() expects it.
           array_reverse($info['projects']);
-        }    
+        }
       }
     }
   }
@@ -599,20 +599,32 @@ function _get_working_copy_option($download) {
 }
 
 /**
- * Given data from stdin, determine format.
+ * Given data from stdin and extension, determine format.
  *
  * @return array|bool
  *   Returns parsed data if it matches any known format.
  */
-function _make_determine_format($data) {
-  // Test INI first.
-  if ($parsed = ParserIni::parse($data)) {
-    $parsed['format'] = 'ini';
-    return $parsed;
+function _make_determine_format($data, $makefile) {
+  // Probably should use `ParserInterface::supportedFile` to determine .yml or .make
+  $info = pathinfo($makefile);
+  $extension = isset($info['extension']) ? $info['extension'] : null;
+
+  $formatMap = array(
+    'yml' => 'Yaml',
+    'make' => 'Ini'
+  );
+
+  try {
+    $parsed = call_user_func(
+      'Drush\Make\Parser\Parser' . $formatMap[$extension] . '::parse',
+      $data
+    );
+    if ($parsed) {
+      $parsed['format'] = $format;
+    }
+  } catch(Exception $e) {
+    return drush_set_error('MAKE_STDIN_ERROR', dt($e->getMessage()));
   }
-  elseif ($parsed = ParserYaml::parse($data)) {
-    $parsed['format'] = 'yaml';
-    return $parsed;
-  }
-  return drush_set_error('MAKE_STDIN_ERROR', dt('Unknown make file format'));
+
+  return $parsed ? $parsed : drush_set_error('MAKE_STDIN_ERROR', dt('Unknown make file format'));
 }
